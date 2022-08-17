@@ -1,0 +1,77 @@
+#import directoris
+import tweepy
+import configparser
+from tweepy import OAuthHandler
+from textblob import TextBlob
+import pandas as pd
+import numpy as np
+import re
+import matplotlib.pyplot as plt
+plt.style.use('fivethirtyeight')
+
+#twitter consumer key and access tokens to be entered
+config = configparser.ConfigParser()
+config.read('config.txt')
+consumerKey= ""
+consumerSecret=""
+accessToken=""
+accessTokenSecret=""
+
+#authentication
+authenticate= tweepy.OAuthHandler(consumerKey, consumerSecret)
+authenticate.set_access_token(accessToken,accessTokenSecret)
+api=tweepy.API(authenticate, wait_on_rate_limit=True)
+
+#searching for tweets
+search_term='#bitcoin -filter:retweets'
+tweets = tweepy.Cursor(api.search,q=search_term,lang="en",since='2018-11-01',tweet_mode="extended" ).items(2000)
+all_tweets=[tweet.full_text for tweet in tweets]
+df= pd.DataFrame(all_tweets, columns= ['Tweets'])
+df.head(5)
+
+#function for cleaning the tweet
+def cleanTwt(twt):
+  twt=re.sub('#bitcoin','bitcoin',twt)
+  twt=re.sub('#Bitcoin','Bitcoin',twt)
+  twt=re.sub('#[A-Za-z0-9]+','',twt)
+  twt=re.sub('\\n','',twt)
+  twt=re.sub('https?:\/\/\S+','',twt)
+  return twt
+df['Cleaned_Tweets']=df['Tweets'].apply(cleanTwt)
+df.head(10)
+
+#analysis absed on subjectivity and polarity
+def getSubjectivity (twt):
+  return TextBlob(twt).sentiment.subjectivity
+def getPolarity (twt):
+  return TextBlob(twt).sentiment.polarity
+df['Subjectivity'] = df['Cleaned_Tweets'].apply(getSubjectivity)
+df['Polarity'] = df['Cleaned_Tweets'].apply(getPolarity)
+df.head()
+
+#defining parameters to decide the score 
+def getSentiment (score):
+  if score < 0:
+    return 'Negative'
+  elif score==0:
+    return 'Neutral'
+  else:
+    return 'Positive'
+df['Sentiment'] =df['Polarity'].apply(getSentiment)
+df.head()
+
+#plot
+plt.figure(figsize=(8,6))
+for i in range(0, df.shape[0]):
+  plt.scatter(df['Polarity'][i], df['Subjectivity'][i], color='Purple')
+plt.title('Sentiment Analysis Scatter Plot')
+plt.xlabel('Polarity')
+plt.ylabel('Subjectivity')
+plt.show()
+
+#graph value
+df['Sentiment'].value_counts().plot(kind='bar')
+plt.title('Sentiment Analysis Bar Plot')
+plt.xlabel('Sentiment')
+plt.ylabel('Number of Tweets')
+plt.show()
